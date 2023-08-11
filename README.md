@@ -1,8 +1,7 @@
 # STLC-idris
-An implementation of the simply typed lambda calculus (STLC) supporting primitive recursion on Nats using dependent types.
-
+An implementation of the simply typed lambda calculus (STLC) supporting pairs, atoms, lists, nats, and primitive recursion for naturals and lists.
 ## What is this?
-This is an implementation of a simply typed lambda calculus which also includes natural numbers and a construct for primitive recursion.
+This is an implementation of a simply typed lambda calculus which also includes natural numbers as well as pairs, lists, and atoms alongside constructs for performing primitive recursion on natural numbers and lists.
 
 Usually, an implementation of an STLC requires type-checking. However, this implementation uses dependent types to bypass the need for a type checker by making ill-typed programs impossible to represent. In effect, this delegates the process of type-checking to the host language (in this case, Idris). 
 
@@ -18,7 +17,15 @@ Expressions evaluate to a value of a `Val` type, which is also indexed by a cont
 
 Values are "normalized" or "read back" into expressions which are their normal form. In this STLC, normal forms are unique, and so can be thought of as the simplest possible program which can produce a given value. Thus, `(lambda (x) (add1 (add1 x)))` and `(lambda (x) (add1 ((lambda (y) y) (add1 x))))` both "do the same thing", but the former is clearly "simpler".
 ### The `Ty` type
-The `Ty` type represents the types of STLC values. A `Ty` is either `TNat`, representing the type of natural numbers, or `a :=> b` for `a b : Ty`, representing a function from `a` to `b`.
+The `Ty` type represents the types of STLC values. We have naturals, atoms, functions, pairs, and lists, giving
+```idris
+data Ty
+    = TNat
+    | Atom
+    | (:=>) Ty Ty
+    | TPair Ty Ty
+    | TList Ty
+```
 ### Contexts and De Bruijn indices
 Variables are represented by their De Bruijn index, which is a non-negative integer representing the number of binders between the variables occurrence and its initial binding site.
 
@@ -30,9 +37,16 @@ data Expr : Context -> Ty -> Type where
     Var : DeBruijn ctx a -> Expr ctx a
     Lam : Expr (a :: ctx) b -> Expr ctx (a :=> b)
     (:@) : Expr ctx (a :=> b) -> Expr ctx a -> Expr ctx b
+    Quote : String -> Expr ctx Atom
     Zero : Expr ctx TNat
     Add1 : Expr ctx TNat -> Expr ctx TNat
     Rec : Expr ctx TNat -> Expr ctx a -> Expr ctx (TNat :=> a :=> a) -> Expr ctx a
+    Cons : Expr ctx a -> Expr ctx b -> Expr ctx (TPair a b)
+    Car : Expr ctx (TPair a b) -> Expr ctx a
+    Cdr : Expr ctx (TPair a b) -> Expr ctx b
+    LNil : Expr ctx (TList a)
+    LCons : Expr ctx a -> Expr ctx (TList a) -> Expr ctx (TList a)
+    RecList : Expr ctx (TList a) -> Expr ctx x -> Expr ctx (a :=> (TList a) :=> x :=> x) -> Expr ctx x
     The : (a : Ty) -> Expr ctx a -> Expr ctx a
 ```
 The type of the `Var` constructor ensures that one can't reference a variable which does not exist in the context. 
@@ -41,17 +55,17 @@ Similarly, the type of the `Lam` constructor can be read as the typing rule "if 
 ### The `Val` type
 The `Val` type is defined by mutual recursion with the `Neutral` type and the `Env` type, which represent "neutral" STLC values and an evaluation environment.
 
-A neutral value is a "stuck" computation; something that can not be evaluated further. Computation in this STLC only occurs during
- 1. variable lookups
- 2. applications of one term to another
- 3. primitive recursion
-so the `Neutral` type has a constructor corresponding to each case:
+A neutral value is a "stuck" computation; something that can not be evaluated further. This corresponds to elimination of values, so we have one constructor for each eliminator, as well as a constructor representing neutral variables:
 ```idris
 data Neutral : Context -> Ty -> Type where
     NVar : DeBruijn ctx a -> Neutral ctx a
     NApp : Neutral ctx (a :=> b) -> Val ctx a -> Neutral ctx b
     NRec : Neutral ctx TNat -> Val ctx a -> Val ctx (TNat :=> a :=> a) -> Neutral ctx a
-```
+
+    NCar : Neutral ctx (TPair a b) -> Neutral ctx a
+    NCdr : Neutral ctx (TPair a b) -> Neutral ctx b
+
+    NRecList : Neutral ctx (TList a) -> Val ctx x -> Val ctx (a :=> (TList a) :=> x :=> x) -> Neutral ctx x ```
 
 The `Env` type is indexed on _two_ contexts: the first is the context on which the values in the environment are all indexed, while the second gives the actual mapping between variables and their types:
 ```idris
@@ -60,7 +74,7 @@ data Env : Context -> Context -> Type where
     (:::) : Val ctx' a -> Env ctx' ctx -> Env ctx' (a :: ctx)
 ```
 
-Finally, a `Val ctx a` is either neutral, a natural number, or a lambda abstraction. The last is represented as an expression bundled with an environment, giving:
+Finally, a `Val ctx a` corresponds to the introduction rules of the STLC, so we have one constructor for each way of introducing functions, nats, pairs, and lists:
 ```idris
 data Val : Context -> Ty -> Type where
     VNeutral : Neutral ctx a -> Val ctx a
@@ -68,6 +82,13 @@ data Val : Context -> Ty -> Type where
 
     VZero : Val ctx TNat
     VAdd1 : Val ctx TNat -> Val ctx TNat
+
+    VPair : Val ctx a -> Val ctx b -> Val ctx (TPair a b)
+
+    VNil : Val ctx (TList a)
+    VCons : Val ctx a -> Val ctx (TList a) -> Val ctx (TList a)
+
+    VAtom : String -> Val ctx Atom
 ```
 ### Evaluation
 Given an `Env ctx' ctx` and an `Expr ctx a`, we produce a `Val ctx' a` by the process of evaluation.
@@ -121,14 +142,22 @@ The constructors of the `Neutral` type correspond directly to constructors of th
 ```idris
 readback (VNeutral w) = nereadback w
 
+nereadback : Neutral ctx a -> Expr ctx a
 nereadback (NVar x) = Var x
 nereadback (NApp f x) = (nereadback f) :@ (readback x)
 nereadback (NRec n b s) = Rec (nereadback n) (readback b) (readback s)
+nereadback (NCar p) = Car $ nereadback p
+nereadback (NCdr p) = Cdr $ nereadback p
+nereadback (NRecList xs b s) = RecList (nereadback xs) (readback b) (readback s)
 ```
-Similarly, reading back `VZero` and `VAdd1 n` is easy, as they two correspond directly to syntax:
+Similarly, most of the `Val` constructors correspond directly to `Expr` constructors, so reading them back is easy:
 ```idris
 readback VZero = Zero
 readback (VAdd1 n) = Add1 $ readback n
+readback (VPair a b) = Cons (readback a) (readback b)
+readback VNil = LNil
+readback (VCons x xs) = LCons (readback x) (readback xs)
+readback (VAtom s) = Quote s
 ```
 Normalizing a lambda abstraction is trickier, though, since the body of a lambda term might still contain unrealized computation that should be simplified. We can achieve this by applying a function value to a neutral variable, normalizing the result, and then wrapping that in `Lam`.
 
@@ -150,8 +179,8 @@ liftVal : ctx `Contains` ctx' -> Val ctx' a -> Val ctx a
 In fact, since the `Val` type depends also on the `Env`, `Neutral`, and `DeBruijn` types, which all depend on a context, we also need to define
 ```idris
 liftDeBruijn : ctx `Contains` ctx' -> DeBruijn ctx' a -> DeBruijn ctx a
-liftEnv : ctx `Contains` ctx' -> Env ctx' c -> Env ctx c
-liftNeutral : ctx `Contains` ctx' -> Neutral ctx' a -> Neutral ctx a
+liftEnv      : ctx `Contains` ctx' -> Env ctx' c -> Env ctx c
+liftNeutral  : ctx `Contains` ctx' -> Neutral ctx' a -> Neutral ctx a
 ```
 
 Finally, we can normalize a function value as follows:
