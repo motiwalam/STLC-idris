@@ -118,9 +118,9 @@ def define(env: Env, name: str, body: Expr) -> Env:
 def de_bruijn(i):
     def index(i):
         if i == 0:
-            return 'Stop'
+            return 'Z'
         
-        return f'Pop ({index(i-1)})'
+        return f'S ({index(i-1)})'
     
     return f'Var ({index(i)})'
 
@@ -201,14 +201,14 @@ def env_to_idris(env: Env) -> str:
 
 def do_term(term) -> Expr:
     match term:        
-        case [Symbol('lambda'), symbols, body]:
+        case [Symbol('lambda'), [*symbols, x1], body]:
             return foldr(
                 lambda x, acc: Lam(str(x), acc),
                 symbols,
-                do_term(body)
+                Lam(str(x1), do_term(body))
             )
 
-        case [Symbol('rec'), target, base, step]:
+        case [Symbol('rec-nat'), target, base, step]:
             return Rec(
                 do_term(target),
                 do_term(base),

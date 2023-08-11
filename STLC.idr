@@ -6,10 +6,10 @@ infixr 0 :=>
 public export
 data Ty
     = TNat
+    | Atom
     | (:=>) Ty Ty
     | TPair Ty Ty
     | TList Ty
-    | Atom
 
 Show Ty where
     show TNat = "Nat"
@@ -19,14 +19,13 @@ Show Ty where
     show Atom = "Atom"
 
 public export
-data Context : Type where
-    Nil : Context
-    (::) : Ty -> Context -> Context
+Context : Type
+Context = List Ty
 
 public export
 data DeBruijn : Context -> Ty -> Type where
-    Stop : DeBruijn (a :: r) a
-    Pop  : DeBruijn ctx a -> DeBruijn (_ :: ctx) a
+    Z : DeBruijn (a :: r) a
+    S : DeBruijn ctx a -> DeBruijn (_ :: ctx) a
 
 infixl 0 :@
 public export
@@ -34,17 +33,17 @@ data Expr : Context -> Ty -> Type where
     Var : DeBruijn ctx a -> Expr ctx a
     Lam : Expr (a :: ctx) b -> Expr ctx (a :=> b)
     (:@) : Expr ctx (a :=> b) -> Expr ctx a -> Expr ctx b
+    Quote : String -> Expr ctx Atom
     Zero : Expr ctx TNat
     Add1 : Expr ctx TNat -> Expr ctx TNat
     Rec : Expr ctx TNat -> Expr ctx a -> Expr ctx (TNat :=> a :=> a) -> Expr ctx a
-    The : (a : Ty) -> Expr ctx a -> Expr ctx a
     Cons : Expr ctx a -> Expr ctx b -> Expr ctx (TPair a b)
     Car : Expr ctx (TPair a b) -> Expr ctx a
     Cdr : Expr ctx (TPair a b) -> Expr ctx b
     LNil : Expr ctx (TList a)
     LCons : Expr ctx a -> Expr ctx (TList a) -> Expr ctx (TList a)
     RecList : Expr ctx (TList a) -> Expr ctx x -> Expr ctx (a :=> (TList a) :=> x :=> x) -> Expr ctx x
-    Quote : String -> Expr ctx Atom
+    The : (a : Ty) -> Expr ctx a -> Expr ctx a
 
 public export
 show_expr : {a : Ty} -> {ctx : Context} -> Expr ctx a -> String
@@ -54,8 +53,8 @@ show_expr e = showHelper [] e where
 
     db_list : DeBruijn _ _ -> List String -> Maybe String
     db_list _ [] = Nothing
-    db_list Stop (x :: r) = Just x
-    db_list (Pop k) (x :: r) = db_list k r
+    db_list Z (x :: r) = Just x
+    db_list (S k) (x :: r) = db_list k r
 
     showHelper : List String -> Expr _ _ -> String
     showHelper _ Zero = "0"
@@ -104,18 +103,17 @@ mutual
 
         NRecList : Neutral ctx (TList a) -> Val ctx x -> Val ctx (a :=> (TList a) :=> x :=> x) -> Neutral ctx x 
     
-    infixr 0 :::
     data Env : Context -> Context -> Type where
-        Empty : Env ctx' Nil
-        (:::) : Val ctx' a -> Env ctx' ctx -> Env ctx' (a :: ctx)
+        Nil : Env ctx' Nil
+        (::) : Val ctx' a -> Env ctx' ctx -> Env ctx' (a :: ctx)
 
 lookup : DeBruijn ctx a -> Env ctx' ctx -> Val ctx' a
-lookup Stop (a ::: r) = a
-lookup (Pop k) (a ::: r) = lookup k r
+lookup Z (a :: r) = a
+lookup (S k) (a :: r) = lookup k r
 
 mutual
     doApply : Val ctx (a :=> b) -> Val ctx a -> Val ctx b
-    doApply (VClosure env f) x = eval (x ::: env) f
+    doApply (VClosure env f) x = eval (x :: env) f
     doApply (VNeutral f) x = VNeutral $ NApp f x
 
     doRec : Val ctx TNat -> Val ctx a -> Val ctx (TNat :=> a :=> a) -> Val ctx a
@@ -161,54 +159,46 @@ mutual
 
 
 infix 0 :<=
-data (:<=) : Context -> Context -> Type where
-    Refl : ctx :<= ctx
-    Weak : ctx :<= ctx' -> (a :: ctx) :<= ctx'
-    Lift : ctx :<= ctx' -> (a :: ctx) :<= (a :: ctx')
-
-infixl 0 :.
-(:.) : ctx :<= ctx' -> ctx' :<= ctx'' -> ctx :<= ctx''
-Refl :. x = x
-(Weak x) :. y = Weak (x :. y)
-(Lift x) :. Refl = Lift x
-(Lift x) :. (Weak y) = Weak (x :. y)
-(Lift x) :. (Lift y) = Lift (x :. y)
+data Contains : Context -> Context -> Type where
+    Refl : ctx `Contains` ctx
+    Weak : ctx `Contains` ctx' -> (a :: ctx) `Contains` ctx'
+    Lift : ctx `Contains` ctx' -> (a :: ctx) `Contains` (a :: ctx')
 
 mutual
-    weakenDeBruijn : ctx :<= ctx' -> DeBruijn ctx' a -> DeBruijn ctx a
-    weakenDeBruijn Refl x = x
-    weakenDeBruijn (Weak x) k = Pop $ weakenDeBruijn x k
-    weakenDeBruijn (Lift x) Stop = Stop
-    weakenDeBruijn (Lift x) (Pop k) = Pop $ weakenDeBruijn x k
+    liftDeBruijn : ctx `Contains` ctx' -> DeBruijn ctx' a -> DeBruijn ctx a
+    liftDeBruijn Refl x = x
+    liftDeBruijn (Weak x) k = S $ liftDeBruijn x k
+    liftDeBruijn (Lift x) Z = Z
+    liftDeBruijn (Lift x) (S k) = S $ liftDeBruijn x k
 
-    weakenVal : ctx :<= ctx' -> Val ctx' a -> Val ctx a
-    weakenVal _ VZero = VZero
-    weakenVal x (VAdd1 n) = VAdd1 $ weakenVal x n
-    weakenVal Refl v = v
-    weakenVal x (VClosure env f) = VClosure (weakenEnv x env) f
-    weakenVal x (VNeutral n) = VNeutral $ weakenNeutral x n
-    weakenVal x (VPair a b) = VPair (weakenVal x a) (weakenVal x b)
-    weakenVal x VNil = VNil
-    weakenVal x (VCons a as) = VCons (weakenVal x a) (weakenVal x as)
-    weakenVal x v@(VAtom _) = weakenVal x v
+    liftVal : ctx `Contains` ctx' -> Val ctx' a -> Val ctx a
+    liftVal _ VZero = VZero
+    liftVal x (VAdd1 n) = VAdd1 $ liftVal x n
+    liftVal Refl v = v
+    liftVal x (VClosure env f) = VClosure (liftEnv x env) f
+    liftVal x (VNeutral n) = VNeutral $ liftNeutral x n
+    liftVal x (VPair a b) = VPair (liftVal x a) (liftVal x b)
+    liftVal x VNil = VNil
+    liftVal x (VCons a as) = VCons (liftVal x a) (liftVal x as)
+    liftVal x v@(VAtom _) = liftVal x v
 
-    weakenEnv : ctx :<= ctx' -> Env ctx' c -> Env ctx c
-    weakenEnv _ Empty = Empty
-    weakenEnv Refl e = e
-    weakenEnv x (h ::: r) = weakenVal x h ::: weakenEnv x r
+    liftEnv : ctx `Contains` ctx' -> Env ctx' c -> Env ctx c
+    liftEnv _ Nil = Nil
+    liftEnv Refl e = e
+    liftEnv x (h :: r) = liftVal x h :: liftEnv x r
 
-    weakenNeutral : ctx :<= ctx' -> Neutral ctx' a -> Neutral ctx a
-    weakenNeutral x (NVar i) = NVar $ weakenDeBruijn x i
-    weakenNeutral x (NApp f a) = NApp (weakenNeutral x f) (weakenVal x a)
-    weakenNeutral x (NRec n b s) = NRec (weakenNeutral x n) (weakenVal x b) (weakenVal x s)
-    weakenNeutral x (NCar p) = NCar $ weakenNeutral x p
-    weakenNeutral x (NCdr p) = NCdr $ weakenNeutral x p
-    weakenNeutral x (NRecList xs b s) = NRecList (weakenNeutral x xs) (weakenVal x b) (weakenVal x s)
+    liftNeutral : ctx `Contains` ctx' -> Neutral ctx' a -> Neutral ctx a
+    liftNeutral x (NVar i) = NVar $ liftDeBruijn x i
+    liftNeutral x (NApp f a) = NApp (liftNeutral x f) (liftVal x a)
+    liftNeutral x (NRec n b s) = NRec (liftNeutral x n) (liftVal x b) (liftVal x s)
+    liftNeutral x (NCar p) = NCar $ liftNeutral x p
+    liftNeutral x (NCdr p) = NCdr $ liftNeutral x p
+    liftNeutral x (NRecList xs b s) = NRecList (liftNeutral x xs) (liftVal x b) (liftVal x s)
 
 mutual
     readback : Val ctx a -> Expr ctx a
     readback (VNeutral w) = nereadback w
-    readback v@(VClosure _ _) = Lam $ readback $ doApply (weakenVal (Weak Refl) v) $ VNeutral (NVar Stop)
+    readback v@(VClosure _ _) = Lam $ readback $ doApply (liftVal (Weak Refl) v) $ VNeutral (NVar Z)
     readback VZero = Zero
     readback (VAdd1 n) = Add1 $ readback n
     readback p@(VPair a b) = Cons (readback a) (readback b)
@@ -226,8 +216,8 @@ mutual
 
 
 ide : (c : Context) -> Env c c
-ide Nil = Empty
-ide (a :: c) = (VNeutral $ NVar Stop) ::: (weakenEnv (Weak Refl) (ide c))
+ide Nil = Nil
+ide (a :: c) = (VNeutral $ NVar Z) :: (liftEnv (Weak Refl) (ide c))
 
 public export
 normal : {ctx : Context} -> Expr ctx a -> Expr ctx a
