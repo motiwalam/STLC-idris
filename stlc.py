@@ -127,19 +127,20 @@ def de_bruijn(i):
 def symb_to_idris(x: str) -> str:
     return (
         x.replace('?', 'q')
-         .replace('-', '_')
-         .replace('+', 'plus')
-         .replace('*', 'times')
-         .replace('/', 'slash')
+         .replace('-', 'minus_stlc')
+         .replace('+', 'plus_stlc')
+         .replace('*', 'times_stlc')
+         .replace('/', 'slash_stlc')
          .replace('&', 'amp')
          .replace('%', 'percent')
          .replace('$', 'dollar')
          .replace('@', 'at')
          .replace('!', 'ex')
-         .replace('#', 'hash')
-         .replace('<', 'lt')
-         .replace('>', 'gt')
-         .replace('=', 'eq')
+         .replace('#', 'hash_stlc')
+         .replace('<', 'lt_stlc')
+         .replace('>', 'gt_stlc')
+         .replace('=', 'eq_stlc')
+         .replace('^', 'pow')
     )
 
 def to_idris(expr: Expr) -> str:
