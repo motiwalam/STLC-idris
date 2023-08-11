@@ -44,6 +44,30 @@
         (rec
             n
             0
-            (lambda (n-1 acc) (+ acc n-1)))))
+            (lambda (n-1 acc) (+ acc (add1 n-1))))))
 
-(gauss 7)
+(claim gauss2
+    (-> Nat Nat))
+(define gauss2
+    (lambda (n)
+        (car (iter-nat
+            n
+            (cons 0 0)
+            (lambda (p)
+                (cons
+                    (+ (add1 (cdr p)) (car p))
+                    (add1 (cdr p))))
+            ))))
+
+(claim map
+    (-> (-> a b) (List a) (List b)))
+(define map
+    (lambda (f l)
+        (rec-list
+            l
+            nil
+            (lambda (x xs acc) (:: (f x) acc))
+            )))
+
+(map (* 2) [1 2 3 4])
+

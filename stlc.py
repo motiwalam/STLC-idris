@@ -1,10 +1,12 @@
 from numbers import Number
 import sys
-from sexpdata import Symbol, parse as parse_sexpr
+from sexpdata import Symbol, Brackets, Quoted, parse as parse_sexpr
 from dataclasses import dataclass
 from functools import reduce as foldl
 
 foldr = lambda f, xs, i: foldl(lambda a, b: f(b, a), reversed(xs), i)
+
+class ParseError(Exception): pass
 
 class Expr: pass
 
@@ -29,6 +31,33 @@ class Rec(Expr):
     s: Expr
 
 @dataclass
+class Cons(Expr):
+    car : Expr
+    cdr : Expr
+
+@dataclass
+class Car(Expr):
+    p: Expr
+
+@dataclass
+class Cdr(Expr):
+    p: Expr
+
+@dataclass 
+class Nil(Expr): pass
+
+@dataclass
+class LCons(Expr):
+    x: Expr
+    xs: Expr
+
+@dataclass
+class RecList(Expr): 
+    xs: Expr
+    b: Expr
+    s: Expr
+
+@dataclass
 class Zero(Expr): pass
 
 @dataclass
@@ -39,9 +68,25 @@ class Add1(Expr):
 class Nat(Expr): pass
 
 @dataclass
+class Atom(Expr): pass
+
+@dataclass
+class Quote(Expr):
+    s: str
+
+@dataclass
 class Arr(Expr):
     a: Expr
     b: Expr
+
+@dataclass 
+class Pair(Expr):
+    car_t: Expr
+    cdr_t : Expr
+
+@dataclass
+class List(Expr):
+    a: Expr
 
 @dataclass
 class The(Expr):
@@ -116,12 +161,32 @@ def to_idris(expr: Expr) -> str:
                 return 'Zero'
             case Add1(n):
                 return f'Add1 ({helper(ns, n)})'
+            case Cons(a,b):
+                return f'Cons ({helper(ns, a)}) ({helper(ns, b)})'
+            case Car(p):
+                return f'Car ({helper(ns, p)})'
+            case Cdr(p):
+                return f'Cdr ({helper(ns, p)})'
+            case Nil():
+                return 'LNil'
+            case LCons(x,xs):
+                return f'LCons ({helper(ns, x)}) ({helper(ns, xs)})'
+            case RecList(xs,b,s):
+                return f'RecList ({helper(ns, xs)}) ({helper(ns, b)}) ({helper(ns, s)})'
             case Nat():
                 return 'TNat'
             case Arr(a,b):
                 return f'({helper(ns, a)}) :=> ({helper(ns, b)})'
+            case Pair(at,dt):
+                return f'TPair ({helper(ns, at)}) ({helper(ns, dt)})'
+            case List(a):
+                return f'TList ({helper(ns, a)})'
             case The(a, e):
                 return f'The ({helper(ns, a)}) ({helper(ns, e)})'
+            case Atom():
+                return 'Atom'
+            case Quote(s):
+                return f'Quote "{s}"'
 
     return helper([], expr)
 
@@ -159,6 +224,41 @@ def do_term(term) -> Expr:
         case [Symbol('the'), a, e]:
             return The(do_term(a), do_term(e))
         
+        case [Symbol('cons'), a, b]:
+            return Cons(do_term(a), do_term(b))
+        
+        case [Symbol(','), *r, a, b]:
+            return foldr(
+                lambda x, acc: Cons(do_term(x), acc),
+                r,
+                Cons(do_term(a), do_term(b))
+            )
+        
+        case [Symbol('car'), p]:
+            return Car(do_term(p))
+        
+        case [Symbol('cdr'), p]:
+            return Cdr(do_term(p))
+        
+        case Symbol('nil'):
+            return Nil()
+        
+        case [Symbol('List'), a]:
+            return List(do_term(a))
+        
+        case [Symbol('::'), x, xs]:
+            return LCons(do_term(x), do_term(xs))
+        
+        case [Symbol('rec-list'), xs, b, s]:
+            return RecList(do_term(xs), do_term(b), do_term(s))
+        
+        case Brackets(lst):
+            return foldr(
+                lambda x, acc: LCons(do_term(x), acc),
+                lst,
+                Nil()
+            )
+        
         case Symbol('Nat'):
             return Nat()
         
@@ -167,6 +267,15 @@ def do_term(term) -> Expr:
                 lambda x, acc: Arr(do_term(x), acc), 
                 r, 
                 Arr(do_term(t1), do_term(t2)))
+        
+        case Symbol('Atom'):
+            return Atom()
+        
+        case Quoted(Symbol(x)):
+            return Quote(x)
+        
+        case Quoted(x):
+            raise ParseError(f'invalid atom {x}')
 
         case [rator, x, *rands]:
             return foldl(lambda acc, x: App(acc, do_term(x)), rands, App(do_term(rator), do_term(x)))
@@ -178,15 +287,15 @@ def do_term(term) -> Expr:
             if isinstance(x, Number):
                 if (y := int(x)) == x:
                     if y < 0:
-                        f'Negative natural: {y}'
+                        raise ParseError(f'Negative natural: {y}')
                     
                     return nat_to_expr(y)
                 
                 else:
-                    f"Invalid natural: {x}"
+                    raise ParseError(f"Invalid natural: {x}")
 
             else:
-                f'Unrecognized form: {x}'
+                raise ParseError(f'Unrecognized form: {x}')
 
 def process(program):
     env = {}
@@ -208,7 +317,7 @@ def process(program):
 
 def main(fn,outfile="Main.idr"):
     with open(fn) as f:
-        p = parse_sexpr(f.read())
+        p = parse_sexpr(f.read(), nil='', true='')
     
     env,results = process(p)
     
