@@ -79,6 +79,24 @@ def de_bruijn(i):
     
     return f'Var ({index(i)})'
 
+def symb_to_idris(x: str) -> str:
+    return (
+        x.replace('?', 'q')
+         .replace('-', '_')
+         .replace('+', 'plus')
+         .replace('*', 'times')
+         .replace('/', 'slash')
+         .replace('&', 'amp')
+         .replace('%', 'percent')
+         .replace('$', 'dollar')
+         .replace('@', 'at')
+         .replace('!', 'ex')
+         .replace('#', 'hash')
+         .replace('<', 'lt')
+         .replace('>', 'gt')
+         .replace('=', 'eq')
+    )
+
 def to_idris(expr: Expr) -> str:
     def helper(ns: list[str], expr):
         match expr:
@@ -86,7 +104,8 @@ def to_idris(expr: Expr) -> str:
                 if x in ns:
                     i = ns.index(x)
                     return de_bruijn(i)
-                return x
+                return symb_to_idris(x)
+            
             case Lam(x, f):
                 return f'Lam ({helper([x, *ns], f)})'
             case App(f, x):
@@ -176,11 +195,11 @@ def process(program):
         match term:
             case [Symbol('claim'), Symbol(x), val]:
                 t = do_term(val)
-                env = claim(env, x, t)
+                env = claim(env, symb_to_idris(x), t)
 
             case [Symbol('define'), Symbol(x), val]:
                 t = do_term(val)
-                env = define(env, x, t)
+                env = define(env, symb_to_idris(x), t)
             
             case x:
                 results.append(do_term(x))
