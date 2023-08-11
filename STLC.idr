@@ -201,7 +201,7 @@ mutual
     readback v@(VClosure _ _) = Lam $ readback $ doApply (liftVal (Weak Refl) v) $ VNeutral (NVar Z)
     readback VZero = Zero
     readback (VAdd1 n) = Add1 $ readback n
-    readback p@(VPair a b) = Cons (readback a) (readback b)
+    readback (VPair a b) = Cons (readback a) (readback b)
     readback VNil = LNil
     readback (VCons x xs) = LCons (readback x) (readback xs)
     readback (VAtom s) = Quote s
