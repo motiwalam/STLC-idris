@@ -7,7 +7,173 @@ Usually, an implementation of an STLC requires type-checking. However, this impl
 
 This delegation has some notable side effects. In particular, even though the STLC does not technically support polymorphic types, this implementation inherits them "for free" from the host language. 
 
-Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, this repositor also contains scripts `stlc.py` and `run.sh` which allow for writing STLC programs using S-expression syntax. If `program.rkt` contains STLC code in this syntax, the command `./run.sh program.rkt` will translate that code into Idris code, run the Idris compiler, and output the result. 
+Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, this repositor also contains scripts `stlc.py` and `run.sh` which allow for writing STLC programs using S-expression syntax (described below). If `program.rkt` contains STLC code in this syntax, the command `./run.sh program.rkt` will translate that code into Idris code, run the Idris compiler, and output the result. 
+
+## The front end language
+Writing STLC programs directly with Idris constructors is cumbersome for a variety of reasons. To that end, the script `stlc.py` is provided to translate programs written in a simpler syntax into Idris code; the script `run.sh` then passes this translated code into the Idris compiler and prints the result.
+
+### Syntax
+This simpler language has `type`s, `expr`s, and two special forms `claim` and `define`. The syntax for types is:
+```
+<type> ::= Nat
+         | Atom
+         | (-> <type> <type>)
+         | (Pair <type> <type>)
+         | (List <type>)
+```
+Also, the syntax `(-> <type> <type> <type>*)` desugars to `(-> <type> (-> <type> (-> <type> <type>...)))` making it easier to represent functions of "more than one argument" (all functions are curried, so this is strictly a matter of convenient syntax).
+
+Then, an `expr` is
+```
+<expr> ::= <identifier>
+         | (lambda (<identifier>) <expr>)
+         | (<expr> <expr>)
+         | '<identifier>
+         | zero
+         | (add1 <expr>)
+         | (rec-nat <expr> <expr> <expr>)
+         | (cons <expr> <expr>)
+         | (car <expr>)
+         | (cdr <expr>)
+         | nil
+         | (:: <expr> <expr>)
+         | (rec-list <expr> <expr> <expr>)
+         | (the <type> <expr>)
+```
+Again, there is syntax sugar for defining multi-argument functions with `(lambda (<identifer> <identifier>*) <expr>)` and applying them with `(<expr> <expr> <expr>*)`.
+
+There's also syntax sugar for defining nested pairs `(, <expr> <expr> <expr>*)` and `[<expr>*]`.
+
+Finally, a name can be assigned a time with `claim`: `(claim <identiier> <type>)` and assigned an expression with `define`: `(define <identifer> <expr>)`.
+
+Neither is strictly required for the other. A name can be claimed but not defined and defined but not claimed.
+
+### Typing rules
+The typing rules are standard. 
+
+#### Lambda abstraction
+If `e : b` in a context `C, x : a`, then `(lambda (x) e)` has type `(-> a b)` in context `C`.
+
+#### Application
+If `f : (-> a b)` and `x : a` in a context `C`, then `(f x)` has type `b` in context `C`.
+
+#### Atom
+In any context, for any identifer `x`, `'x` has type Atom.
+
+#### Nat
+In any context, `0 : Nat`. If `n : Nat` in context `C`, then `(add1 n) : Nat` in context `C`.
+
+If, in context `C`, we have `n : Nat`, `b : a`, and `s : (-> Nat a a)`, then `(rec-nat n b s) : a` in the same context.
+
+#### Pair
+If `x : a` and `y : b` in context `C`, then `(cons x y) : (Pair a b)` in the same context.
+
+If `p : (Pair a b)` in context `C`, then `(car p) : a` and `(cdr p) : b` in the same context.
+
+#### List
+In any context, `nil : (List a)`. If `x : a` and `l : (List a)` in some context `C`, then `(:: x l) : (List a)` in the same context.
+
+If, in context `C`, we have `l : (List a)`, `b : c`, `s : (-> a (List a) c c)`, then `(rec-list l b s) : c` in the same context.
+
+#### Annotation
+If `x : a` in context `C`, then `(the a x) : a` in the same context. 
+
+## Examples
+The following are from the `lib.rkt` file in this repository. Notice the lack of type annotations for `plus`, `prime?` and `nth-prime`: they are not needed, Idris is able to infer the type in each case. However, the annotation is required for `foldr`.
+
+For each example, we also include the raw Idris code it translates to.
+
+### `plus`
+```scheme
+(define plus
+    (lambda (m n)
+        (rec-nat m n 
+            (lambda (_ acc) (add1 acc)))))
+```
+
+```idris
+plus : Expr ctx ?plus_t
+plus = Lam 
+        (Lam 
+          (Rec 
+            (Var (S Z)) 
+            (Var Z) 
+            (Lam 
+              (Lam (Add1 (Var Z))))))
+```
+### `foldr`
+```scheme
+(claim foldr
+    (-> (-> a b b) b (List a) b))
+(define foldr
+    (lambda (f i l)
+        (rec-list
+            l
+            i
+            (lambda (x _ acc)
+                (f x acc))
+            )))
+```
+
+```idris
+foldr : Expr ctx $ (a :=> b :=> b) :=> b :=> (TList a) :=> b
+foldr = Lam $
+         Lam $
+           Lam $
+             RecList 
+               (Var Z)
+               (Var $ S Z) 
+               (Lam 
+                 (Lam 
+                   (Lam 
+                     (((Var $ S (S (S (S (S Z))))) :@ (Var (S (S Z)))) :@ (Var Z)))))
+```
+
+### `prime?` and `nth-prime`
+```scheme
+(define prime?
+    (lambda (p)
+        (== 2 (sum (lambda (x) (divides? x p)) p))))
+```
+
+```idris
+primeq : Expr ctx $ ?primeq_t
+primeq = Lam
+          (eqNat :@ (Add1 $ Add1 Zero)
+              :@ (
+                sum :@ (Lam $ divides :@ (Var Z) :@ (Var (S Z)))
+                    :@ (Var Z)
+              )
+          )
+```
+
+```scheme
+(define nth-prime
+    (lambda (n+1)
+        (rec-nat
+            n+1
+            2
+            (lambda (n pn)
+                ; mu is bounded minimization
+                ; will return the least natural satisfying the given predicate
+                ; or the bound + 1 if there is none
+                (mu (succ (! pn))
+                    (lambda (z)
+                        (* (prime? z) (> z pn))))))))
+```
+
+```idris
+nthminus_stlcprime : Expr ctx $ ?nthminus_stlcprime_t
+nthminus_stlcprime = Lam 
+  (Rec 
+    (Var Z) 
+    (Add1 $ Add1 Zero)
+    (Lam 
+      (Lam 
+        (mu :@ (Add1 (factorial :@ (Var Z))) 
+            :@ (Lam (times :@ (primeq :@ (Var Z)) 
+                           :@ (gt :@ (Var Z) :@ (Var $ S Z))))))))
+```
 
 ## How does it work?
 ### Overview
