@@ -132,30 +132,30 @@ readback (VAdd1 n) = Add1 $ readback n
 ```
 Normalizing a lambda abstraction is trickier, though, since the body of a lambda term might still contain unrealized computation that should be simplified. We can achieve this by applying a function value to a neutral variable, normalizing the result, and then wrapping that in `Lam`.
 
-However, to apply a `Val ctx (a :=> b)`, we need to extend `ctx` with a value of type `a`. To do so, we define a relation `:<=` on contexts, whereby `ctx :<= ctx'` if and only if `ctx` can be obtained from `ctx'` by adding more types onto the front. The intuition here is that if `v` has type `a` in some context `C`, then adding more things into the context shouldn't affect the type of `v`.
+However, to apply a `Val ctx (a :=> b)`, we need to extend `ctx` with a value of type `a`. To do so, we define a relation `Contains` on contexts, whereby `Contains ctx ctx'` if and only if `ctx` can be obtained from `ctx'` by adding more types onto the front. The intuition here is that if `v` has type `a` in some context `C`, then adding more things into the context shouldn't affect the type of `v`.
 
-In code, the relation `:<=` is defined as a data type:
+In code, the relation `Contains` is defined as a data type:
 ```idris
-data (:<=) : Context -> Context -> Type where
-    Refl : ctx :<= ctx
-    Weak : ctx :<= ctx' -> (a :: ctx) :<= ctx'
-    Lift : ctx :<= ctx' -> (a :: ctx) :<= (a :: ctx')
+data Contains : Context -> Context -> Type where
+    Refl : ctx `Contains` ctx
+    Weak : ctx `Contains` ctx' -> (a :: ctx) `Contains` ctx'
+    Lift : ctx `Contains` ctx' -> (a :: ctx) `Contains` (a :: ctx')
 ```
 
-Then, if `ctx :<= ctx'` and we have `v` a `Val ctx' a`, we should also be able to obtain a `Val ctx a`. Again, `ctx :<= ctx'` means `ctx` contains "more stuff" than `ctx'`, which shouldn't affect the type of `v`. So, we define
+Then, if `Contains ctx ctx'` and we have `v` a `Val ctx' a`, we should also be able to obtain a `Val ctx a`. Again, `Contains ctx ctx'` means `ctx` contains "more stuff" than `ctx'`, which shouldn't affect the type of `v`. So, we define
 ```idris
-weakenVal : ctx :<= ctx' -> Val ctx' a -> Val ctx a
+liftVal : ctx `Contains` ctx' -> Val ctx' a -> Val ctx a
 ```
 
 In fact, since the `Val` type depends also on the `Env`, `Neutral`, and `DeBruijn` types, which all depend on a context, we also need to define
 ```idris
-weakenDeBruijn : ctx :<= ctx' -> DeBruijn ctx' a -> DeBruijn ctx a
-weakenEnv : ctx :<= ctx' -> Env ctx' c -> Env ctx c
-weakenNeutral : ctx :<= ctx' -> Neutral ctx' a -> Neutral ctx a
+liftDeBruijn : ctx `Contains` ctx' -> DeBruijn ctx' a -> DeBruijn ctx a
+liftEnv : ctx `Contains` ctx' -> Env ctx' c -> Env ctx c
+liftNeutral : ctx `Contains` ctx' -> Neutral ctx' a -> Neutral ctx a
 ```
 
 Finally, we can normalize a function value as follows:
 ```idris
-readback v@(VClosure _ _) = Lam $ readback $ doApply (weakenVal (Weak Refl) v) $ VNeutral (NVar Stop)
+readback v@(VClosure _ _) = Lam $ readback $ doApply (liftVal (Weak Refl) v) $ VNeutral (NVar Z)
 ```
 
