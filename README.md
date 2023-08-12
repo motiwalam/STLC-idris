@@ -7,7 +7,7 @@ Usually, an implementation of an STLC requires type-checking. However, this impl
 
 This delegation has some notable side effects. In particular, even though the STLC does not technically support polymorphic types, this implementation inherits them "for free" from the host language. 
 
-Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, this repositor also contains scripts `stlc.py` and `run.sh` which allow for writing STLC programs using S-expression syntax (described below). If `program.rkt` contains STLC code in this syntax, the command `./run.sh program.rkt` will translate that code into Idris code, run the Idris compiler, and output the result. 
+Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, this repository also contains scripts `stlc.py` and `run.sh` which allow for writing STLC programs using S-expression syntax (described below). If `program.rkt` contains STLC code in this syntax, the command `./run.sh program.rkt` will translate that code into Idris code, run the Idris compiler, and output the result. 
 
 ## The front end language
 Writing STLC programs directly with Idris constructors is cumbersome for a variety of reasons. To that end, the script `stlc.py` is provided to translate programs written in a simpler syntax into Idris code; the script `run.sh` then passes this translated code into the Idris compiler and prints the result.
@@ -163,8 +163,8 @@ primeq = Lam
 ```
 
 ```idris
-nthminus_stlcprime : Expr ctx $ ?nthminus_stlcprime_t
-nthminus_stlcprime = Lam 
+nth_prime : Expr ctx $ ?nthminus_stlcprime_t
+nth_prime = Lam 
   (Rec 
     (Var Z) 
     (Add1 $ Add1 Zero)
@@ -231,7 +231,8 @@ data Neutral : Context -> Ty -> Type where
     NCar : Neutral ctx (TPair a b) -> Neutral ctx a
     NCdr : Neutral ctx (TPair a b) -> Neutral ctx b
 
-    NRecList : Neutral ctx (TList a) -> Val ctx x -> Val ctx (a :=> (TList a) :=> x :=> x) -> Neutral ctx x ```
+    NRecList : Neutral ctx (TList a) -> Val ctx x -> Val ctx (a :=> (TList a) :=> x :=> x) -> Neutral ctx x
+ ```
 
 The `Env` type is indexed on _two_ contexts: the first is the context on which the values in the environment are all indexed, while the second gives the actual mapping between variables and their types:
 ```idris
@@ -269,34 +270,11 @@ lookup (Pop k) (a ::: r) = lookup k r
 
 eval env (Var x) = lookup x env 
 ```
-Evaluating a lambda abstraction just means creating the closure:
-```idris
-eval env (Lam f) = VClosure env f
-```
-Evaluating the application of `f` to `x` is done by evaluating the body of `f` in an environment extended with `x`:
-```idris
-doApply : Val ctx (a :=> b) -> Val ctx a -> Val ctx b
-doApply (VClosure env f) x = eval (x ::: env) f
-doApply (VNeutral f) x = VNeutral $ NApp f x
+Generally, evaluation isn't too different from evaluation in non-dependently typed languages. The main difference is that the stronger types allow the compiler to verify for us that we aren't missing any cases. For example, as seen above, looking up a variable is guaranteed to succeed. Similarly, in evaluating a function application, the type index on the `Expr` and `Val` types is sufficient to prove that if we have an application of one term `f` to another, then `f` must evaluate to either a `VClosure` or a `VNeutral`.
 
-eval env (f :@ x) = doApply (eval env f) (eval env x)
-```
-We evaluate primitive recursion by calling the evaluator recursively:
-```idris
-doRec : Val ctx TNat -> Val ctx a -> Val ctx (TNat :=> a :=> a) -> Val ctx a
-doRec VZero b s = b
-doRec (VAdd1 n) b s = doApply (doApply s n)
-                                (doRec n b s)
-doRec (VNeutral n) b s = VNeutral $ NRec n b s
+So, we evaluate introduction rules (e.g `Zero`, `Add1`, `Cons`, etc.) by recursively evaluating the arguments and wrapping the result in the corresponding `Val` constructor. Likewise, we evaluate the elimination of neutral values by recursively evaluating the arguments and wrapping the result in the corresponding `Neutral` constructor.
 
-eval env (Rec n b s) = doRec (eval env n) (eval env b) (eval env s)
-```
-The remaining cases are straightforward:
-```idris
-eval env Zero = VZero
-eval env (Add1 n) = VAdd1 $ eval env n
-eval env (The _ e) = eval env e
-```
+Evaluating the elimination of non-neutral values dispatches on the exact eliminator: evaluating `rec-nat` and `rec-list` means carrying out a sequence of recursive evaluations which characterize the notion of primitive recursion embodied by these eliminators, and evaluating `car` and `cdr` mean simply choosing the first and second element of the pair.
 ### Normalization
 In normalization, we want to take a `Val ctx a` and produce an `Expr ctx a`. Since a `Val` is either neutral or not, we split the normalization process into two functions:
 ```idris
