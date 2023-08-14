@@ -259,7 +259,10 @@ def do_term(term) -> Expr:
                 lst,
                 Nil()
             )
-        
+
+        case [Symbol('Pair'), a, b]:
+            return Pair(do_term(a), do_term(b))
+
         case Symbol('Nat'):
             return Nat()
         
