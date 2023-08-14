@@ -1,30 +1,25 @@
-# STLC-idris
+# An implementation of the STLC in Idris
 An implementation of the simply typed lambda calculus (STLC) supporting pairs, atoms, lists, nats, and primitive recursion for naturals and lists.
 
-This implementation leverages the dependent type system of the host language, Idris, to bypass the need for a type checker. We also provide a front-end language consisting of an S-expression based syntax which is translated into the Idris representation of an STLC program by a Python script.
-
-## What is this?
-This is an implementation of a simply typed lambda calculus which also includes natural numbers as well as pairs, lists, and atoms alongside constructs for performing primitive recursion on natural numbers and lists.
-
-Usually, an implementation of an STLC requires type-checking. However, this implementation uses dependent types to bypass the need for a type checker by making ill-typed programs impossible to represent. In effect, this delegates the process of type-checking to the host language (in this case, Idris). 
+Usually, an implementation of an STLC requires type-checking. This implementation leverages the dependent type system of the host language, Idris, to bypass the need for a type checker by making ill-typed programs impossible to represent. In effect, this delegates the process of type-checking to the host language (in this case, Idris). 
 
 This delegation has some notable side effects. In particular, even though the STLC does not technically support polymorphic types, this implementation inherits them "for free" from the host language. 
 
-Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, this repository also contains scripts `stlc.py` and `run.sh` which allow for writing STLC programs using S-expression syntax (described below). If `program.rkt` contains STLC code in this syntax, the command `./run.sh program.rkt` will translate that code into Idris code, run the Idris compiler, and output the result. 
+Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, we also provide a front-end language consisting of an S-expression based syntax which is translated into the Idris representation of an STLC program by the scripts: `stlc.py` and `run.sh`. For example, the command `./run.sh program.rkt Output.idr` will take code written in this front-end syntax in the file `program.rkt`, translate it into Idris and place the output in `Output.idr`, run the Idris compiler, and print the result. 
 
 ## A note on the host language
 As mentioned above, this implementation is done in Idris. In Idris, types are "first-class" which enables an interplay between types and values that this implementation relies on to narrow the space of representable programs to exactly those which are well-typed.
 
-More information about Idris can be found [here](https://www.idris-lang.org/).
+More information about Idris can be found [on the official Idris website](https://www.idris-lang.org/).
 
 ## The code base
 The evaluator and normalizer are written in Idris in `STLC.idr`. An overview of how it works is described below.
 
-The file `sexpdata.py` contains an S-expression parser that was written by Takafumi Arakaki and Joshua Boyd. More information about this library can be found [here](https://sexpdata.readthedocs.io/en/latest/).
+The file `sexpdata.py` contains an S-expression parser that was originally written by Takafumi Arakaki and Joshua Boyd and released under the BSD-2 license. Small modifications were made by the author to suit the purposes of this project. More information about this library can be found [in the original github repo](https://github.com/jd-boyd/sexpdata).
 
-`stlc.py` uses the above S-expression parser to define the syntax transformer for the front-end language (described in further detail below).
+The above S-expression parser is used in `stlc.py` to define the syntax transformer for the front-end language (described in further detail below).
 
-`run.sh` is a bash script which glues everything together; it takes as input the file containing the front-end source and (optionally) the output file. The name of the output file must adhere to the Idris language's rules on module file names; i.e, it must be capitalized and end in `.idr`. The script translates the front-end source into Idris code which it stores in the output file, runs the code and prints the result.
+The bash script `run.sh` glues everything together; it takes as input the file containing the front-end source and (optionally) the output file. The name of the output file must adhere to the Idris language's rules on module file names; i.e, it must be capitalized and end in `.idr`. The script translates the front-end source into Idris code which it stores in the output file, runs the code and prints the result.
 
 The `examples/` folder contains front-end source and the resulting Idris output. The naming convention is that front-end source-code is written in files with the `.rkt` extension, and the output of `<file>.rkt` is stored in `STLC_<file>.idr`.
 
@@ -37,7 +32,7 @@ The S-expression syntax itself has certain syntax sugar to support "multi-argume
  3. that of the "front-end" language, plus some additional syntax sugar
 
 In what follows, we describe the syntax of 2. and 3.
-### Syntax
+### Front-end syntax
 The front-end language has `type`s, `expr`s, and two special forms `claim` and `define`. The syntax for types is:
 ```
 <type> ::= Nat
