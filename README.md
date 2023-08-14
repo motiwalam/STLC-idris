@@ -69,7 +69,7 @@ Again, there is syntax sugar for defining multi-argument functions with `(lambda
 
 There's also syntax sugar for defining nested pairs `(, <expr> <expr> <expr>*)` and lists `[<expr>*]`.
 
-Finally, a name can be assigned a time with `claim`: `(claim <identiier> <type>)` and assigned an expression with `define`: `(define <identifer> <expr>)`.
+Finally, a name can be assigned a time with `claim`: `(claim <identifier> <type>)` and assigned an expression with `define`: `(define <identifier> <expr>)`.
 
 Neither is strictly required for the other. A name can be claimed but not defined and defined but not claimed.
 
