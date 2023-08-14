@@ -5,7 +5,7 @@ Usually, an implementation of an STLC requires type-checking. This implementatio
 
 This delegation has some notable side effects. In particular, even though the STLC does not technically support polymorphic types, this implementation inherits them "for free" from the host language. 
 
-Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, we also provide a front-end language consisting of an S-expression based syntax which is translated into the Idris representation of an STLC program by the scripts: `stlc.py` and `run.sh`. For example, the command `./run.sh program.rkt Output.idr` will take code written in this front-end syntax in the file `program.rkt`, translate it into Idris and place the output in `Output.idr`, run the Idris compiler, and print the result. 
+Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, we also provide a front-end language consisting of an S-expression based syntax which is translated into the Idris representation of an STLC program by the scripts: `stlc.py` and `run.sh`. For example, the command `./run.sh hello-world.rkt Output.idr` will take code written in this front-end syntax in the file `hello-world.rkt`, translate it into Idris and place the output in `Output.idr`, run the Idris compiler, and print the result. 
 
 ## A note on the host language
 As mentioned above, this implementation is done in Idris. In Idris, types are "first-class" which enables an interplay between types and values that this implementation relies on to narrow the space of representable programs to exactly those which are well-typed.
