@@ -1,4 +1,4 @@
-module Main
+module STLC_lib
 
 import STLC
 
@@ -107,4 +107,4 @@ nthminus_stlcprime = Lam (Rec (Var (Z)) (Add1 (Add1 (Zero))) (Lam (Lam (((mu) :@
 
 
 r0 : Expr ?ctx0 ?a0
-r0 = normal $ (nthminus_stlcprime) :@ (Quote "atom")
+r0 = normal $ (nthminus_stlcprime) :@ (Add1 (Add1 (Zero)))

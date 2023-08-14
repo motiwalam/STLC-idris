@@ -130,4 +130,4 @@
                         (* (prime? z) (> z pn))))))))
 
 
-(nth-prime 'atom)
+(nth-prime 2)
