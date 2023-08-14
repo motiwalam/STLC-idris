@@ -1,5 +1,8 @@
 # STLC-idris
 An implementation of the simply typed lambda calculus (STLC) supporting pairs, atoms, lists, nats, and primitive recursion for naturals and lists.
+
+This implementation leverages the dependent type system of the host language, Idris, to bypass the need for a type checker. We also provide a front-end language consisting of an S-expression based syntax which is translated into the Idris representation of an STLC program by a Python script.
+
 ## What is this?
 This is an implementation of a simply typed lambda calculus which also includes natural numbers as well as pairs, lists, and atoms alongside constructs for performing primitive recursion on natural numbers and lists.
 
@@ -9,9 +12,20 @@ This delegation has some notable side effects. In particular, even though the ST
 
 Technically, the Idris code only implements an evaluator and normalizer. Since writing programs directly as syntax trees is cumbersome and error prone, this repository also contains scripts `stlc.py` and `run.sh` which allow for writing STLC programs using S-expression syntax (described below). If `program.rkt` contains STLC code in this syntax, the command `./run.sh program.rkt` will translate that code into Idris code, run the Idris compiler, and output the result. 
 
-## The front end language
-Writing STLC programs directly with Idris constructors is cumbersome for a variety of reasons. To that end, the script `stlc.py` is provided to translate programs written in a simpler syntax into Idris code; the script `run.sh` then passes this translated code into the Idris compiler and prints the result.
+## A note on the host language
+As mentioned above, this implementation is done in Idris. In Idris, types are "first-class" which enables an interplay between types and values that this implementation relies on to narrow the space of representable programs to exactly those which are well-typed.
 
+More information about Idris can be found [here](https://www.idris-lang.org/).
+
+## The front end language
+Writing STLC programs directly with Idris constructors is cumbersome for a variety of reasons. To that end, the script `stlc.py` is provided to translate programs written using S-expression syntax into Idris code; the script `run.sh` then passes this translated code into the Idris compiler and prints the result.
+
+The S-expression syntax itself has certain syntax sugar to support "multi-argument" functions. Thus, there are 3 syntaxes involved: 
+ 1. that of the host language Idris; programs are written directly as syntax trees composed of Idris data constructors.
+ 2. that of the "front-end" language; programs are written using S-expression syntax.
+ 3. that of the "front-end" language, plus some additional syntax sugar
+
+In what follows, we describe the syntax of 2. and 3.
 ### Syntax
 This simpler language has `type`s, `expr`s, and two special forms `claim` and `define`. The syntax for types is:
 ```
@@ -42,14 +56,14 @@ Then, an `expr` is
 ```
 Again, there is syntax sugar for defining multi-argument functions with `(lambda (<identifer> <identifier>*) <expr>)` and applying them with `(<expr> <expr> <expr>*)`.
 
-There's also syntax sugar for defining nested pairs `(, <expr> <expr> <expr>*)` and `[<expr>*]`.
+There's also syntax sugar for defining nested pairs `(, <expr> <expr> <expr>*)` and lists `[<expr>*]`.
 
 Finally, a name can be assigned a time with `claim`: `(claim <identiier> <type>)` and assigned an expression with `define`: `(define <identifer> <expr>)`.
 
 Neither is strictly required for the other. A name can be claimed but not defined and defined but not claimed.
 
 ### Typing rules
-The typing rules are standard. 
+This implementation follows standard typing rules for the STLC, as described below.
 
 #### Lambda abstraction
 If `e : b` in a context `C, x : a`, then `(lambda (x) e)` has type `(-> a b)` in context `C`.
