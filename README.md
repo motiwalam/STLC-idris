@@ -38,7 +38,7 @@ The S-expression syntax itself has certain syntax sugar to support "multi-argume
 
 In what follows, we describe the syntax of 2. and 3.
 ### Syntax
-This simpler language has `type`s, `expr`s, and two special forms `claim` and `define`. The syntax for types is:
+The front-end language has `type`s, `expr`s, and two special forms `claim` and `define`. The syntax for types is:
 ```
 <type> ::= Nat
          | Atom
