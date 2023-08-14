@@ -237,8 +237,8 @@ data Neutral : Context -> Ty -> Type where
 The `Env` type is indexed on _two_ contexts: the first is the context on which the values in the environment are all indexed, while the second gives the actual mapping between variables and their types:
 ```idris
 data Env : Context -> Context -> Type where
-    Empty : Env ctx' Nil
-    (:::) : Val ctx' a -> Env ctx' ctx -> Env ctx' (a :: ctx)
+    Nil : Env ctx' Nil
+    (::) : Val ctx' a -> Env ctx' ctx -> Env ctx' (a :: ctx)
 ```
 
 Finally, a `Val ctx a` corresponds to the introduction rules of the STLC, so we have one constructor for each way of introducing functions, nats, pairs, and lists:
@@ -265,8 +265,8 @@ eval : Env ctx' ctx -> Expr ctx a -> Val ctx' a
 Evaluating a variable corresponds to a lookup in the environment, which is guaranteed to succeed since variables can only be constructed via valid De Bruijn indices:
 ```idris
 lookup : DeBruijn ctx a -> Env ctx' ctx -> Val ctx' a
-lookup Stop (a ::: r) = a
-lookup (Pop k) (a ::: r) = lookup k r
+lookup Stop (a :: r) = a
+lookup (Pop k) (a :: r) = lookup k r
 
 eval env (Var x) = lookup x env 
 ```
