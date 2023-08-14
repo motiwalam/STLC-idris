@@ -17,6 +17,17 @@ As mentioned above, this implementation is done in Idris. In Idris, types are "f
 
 More information about Idris can be found [here](https://www.idris-lang.org/).
 
+## The code base
+The evaluator and normalizer are written in Idris in `STLC.idr`. An overview of how it works is described below.
+
+The file `sexpdata.py` contains an S-expression parser that was written by Takafumi Arakaki and Joshua Boyd. More information about this library can be found [here](https://sexpdata.readthedocs.io/en/latest/).
+
+`stlc.py` uses the above S-expression parser to define the syntax transformer for the front-end language (described in further detail below).
+
+`run.sh` is a bash script which glues everything together; it takes as input the file containing the front-end source and (optionally) the output file. The name of the output file must adhere to the Idris language's rules on module file names; i.e, it must be capitalized and end in `.idr`. The script translates the front-end source into Idris code which it stores in the output file, runs the code and prints the result.
+
+The `examples/` folder contains front-end source and the resulting Idris output. The naming convention is that front-end source-code is written in files with the `.rkt` extension, and the output of `<file>.rkt` is stored in `STLC_<file>.idr`.
+
 ## The front end language
 Writing STLC programs directly with Idris constructors is cumbersome for a variety of reasons. To that end, the script `stlc.py` is provided to translate programs written using S-expression syntax into Idris code; the script `run.sh` then passes this translated code into the Idris compiler and prints the result.
 
@@ -93,9 +104,9 @@ If, in context `C`, we have `l : (List a)`, `b : c`, `s : (-> a (List a) c c)`, 
 If `x : a` in context `C`, then `(the a x) : a` in the same context. 
 
 ## Examples
-The following are from the `lib.rkt` file in this repository. Notice the lack of type annotations for `plus`, `prime?` and `nth-prime`: they are not needed, Idris is able to infer the type in each case. However, the annotation is required for `foldr`.
+The following are from the `examples/lib.rkt` file in this repository. Notice the lack of type annotations for `plus`, `prime?` and `nth-prime`: they are not needed, Idris is able to infer the type in each case. However, the annotation is required for `foldr`.
 
-For each example, we also include the raw Idris code it translates to.
+For each example, we also include the raw Idris code it translates to (after some manually done formatting).
 
 ### `plus`
 ```scheme
@@ -144,6 +155,7 @@ foldr = Lam $
 ```
 
 ### `prime?` and `nth-prime`
+In these examples, we make use of several functions which we have defined previously. The code for everything can be found in `examples/lib.rkt`.
 ```scheme
 (define prime?
     (lambda (p)
@@ -177,7 +189,7 @@ primeq = Lam
 ```
 
 ```idris
-nth_prime : Expr ctx $ ?nthminus_stlcprime_t
+nth_prime : Expr ctx $ ?nth_prime_t
 nth_prime = Lam 
   (Rec 
     (Var Z) 
